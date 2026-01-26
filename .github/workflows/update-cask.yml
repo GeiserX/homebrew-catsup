@@ -1,0 +1,100 @@
+name: Update Cask
+
+on:
+  # Check for new releases daily at 6 AM UTC
+  schedule:
+    - cron: '0 6 * * *'
+  # Manual trigger for immediate update after release
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    name: Check and Update Cask
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get latest release from CatsUp
+        id: release
+        run: |
+          RELEASE_JSON=$(curl -sL "https://api.github.com/repos/GeiserX/CatsUp/releases/latest")
+          
+          LATEST_VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name' | sed 's/^v//')
+          
+          if [ "$LATEST_VERSION" == "null" ] || [ -z "$LATEST_VERSION" ]; then
+            echo "❌ Could not fetch latest release"
+            exit 1
+          fi
+          
+          echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Latest release: v$LATEST_VERSION"
+          
+          DMG_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | endswith(".dmg")) | .browser_download_url')
+          echo "dmg_url=$DMG_URL" >> $GITHUB_OUTPUT
+
+      - name: Get current cask version
+        id: current
+        run: |
+          CURRENT_VERSION=$(grep 'version "' Casks/catsup.rb | sed 's/.*version "\([^"]*\)".*/\1/')
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "📋 Current cask version: $CURRENT_VERSION"
+
+      - name: Check if update needed
+        id: check
+        run: |
+          if [ "${{ steps.release.outputs.latest_version }}" == "${{ steps.current.outputs.current_version }}" ]; then
+            echo "✅ Cask is up to date (v${{ steps.current.outputs.current_version }})"
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+          else
+            echo "🔄 Update needed: ${{ steps.current.outputs.current_version }} → ${{ steps.release.outputs.latest_version }}"
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download DMG and calculate SHA256
+        if: steps.check.outputs.needs_update == 'true'
+        id: sha
+        run: |
+          echo "⬇️ Downloading DMG..."
+          curl -L -o catsup.dmg "${{ steps.release.outputs.dmg_url }}"
+          
+          SHA256=$(shasum -a 256 catsup.dmg | awk '{print $1}')
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "📝 SHA256: $SHA256"
+          
+          rm catsup.dmg
+
+      - name: Update cask file
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          VERSION="${{ steps.release.outputs.latest_version }}"
+          SHA256="${{ steps.sha.outputs.sha256 }}"
+          
+          sed -i "s/version \".*\"/version \"$VERSION\"/" Casks/catsup.rb
+          sed -i "s/sha256 \".*\"/sha256 \"$SHA256\"/" Casks/catsup.rb
+          
+          echo "✅ Updated cask to v$VERSION"
+          cat Casks/catsup.rb
+
+      - name: Commit and push
+        if: steps.check.outputs.needs_update == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/catsup.rb
+          git commit -m "Update catsup to v${{ steps.release.outputs.latest_version }}"
+          git push
+
+      - name: Summary
+        run: |
+          echo "## Cask Update Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check.outputs.needs_update }}" == "true" ]; then
+            echo "✅ Updated cask from v${{ steps.current.outputs.current_version }} to v${{ steps.release.outputs.latest_version }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Cask is already up to date (v${{ steps.current.outputs.current_version }})" >> $GITHUB_STEP_SUMMARY
+          fi
