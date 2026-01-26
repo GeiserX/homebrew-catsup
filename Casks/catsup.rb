@@ -2,8 +2,8 @@
 # Install: brew install --cask geiserx/catsup/catsup
 
 cask "catsup" do
-  version "0.0.1"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  version "0.0.2"
+  sha256 "e3a5a7e97192104999526bb9320aae39e5be243d54dc0e17799d7b941dda8dc1"
 
   url "https://github.com/GeiserX/CatsUp/releases/download/v#{version}/CatsUp-#{version}.dmg"
   name "CatsUp"
