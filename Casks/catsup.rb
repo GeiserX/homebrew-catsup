@@ -3,7 +3,7 @@
 
 cask "catsup" do
   version "0.0.2"
-  sha256 "e3a5a7e97192104999526bb9320aae39e5be243d54dc0e17799d7b941dda8dc1"
+  sha256 "fe42b159c71f617811f3dec1be4b6f81cfb690f01c1a029ec163320a4bccae34"
 
   url "https://github.com/GeiserX/CatsUp/releases/download/v#{version}/CatsUp-#{version}.dmg"
   name "CatsUp"
